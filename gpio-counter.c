@@ -19,23 +19,24 @@
 // Inspired by GPIO interrupt example by Igor <hardware.coder@gmail.com>
 // from <http://morethanuser.blogspot.cz/2013/04/raspbery-pi-gpio-interrupts-in-kernel.html>
  
+// Ingwie : Module modded to optimise speed -> Reading Mow motor speed pulses on my Sunray modded fork
 
 static int gpio_num = -1;
 module_param_named(gpio_num, gpio_num, int, 0);
 MODULE_PARM_DESC(gpio_num, "GPIO number");
 
-static int debounce = 0;
+/*static int debounce = 0;
 module_param_named(debounce, debounce, int, 0);
-MODULE_PARM_DESC(debounce, "debounce time (in microseconds)");
+MODULE_PARM_DESC(debounce, "debounce time (in microseconds)");*/
 
-static void *devid = "gpio-counter-Gex3lieshu";// pointer used as unique cookie for register_irq
+static void *devid = "gpio-counter-Gex3lieshuMod";// pointer used as unique cookie for register_irq
  
 static short int irq_num    = 0;
 static atomic64_t counter = ATOMIC64_INIT(0);
 static struct device *dev;
-static u64 last_pulse = 0;
+/*static u64 last_pulse = 0;
 static int last_value = 0;
-static u64 debounce_jiffies = 0;
+static u64 debounce_jiffies = 0;*/
 
 
 static ssize_t count_show(struct device *dev, struct device_attribute *attr,
@@ -45,6 +46,7 @@ static ssize_t count_show(struct device *dev, struct device_attribute *attr,
 
 	return sprintf(buf, "%lld\n", (long long)atomic64_read(&counter));
 }
+
 static ssize_t count_store(struct device *dev,
 					 struct device_attribute *attr,
 					 const char *buf, size_t count)
@@ -58,7 +60,9 @@ static ssize_t count_store(struct device *dev,
         atomic64_set(&counter, val);
         return count;
 }
+
 static DEVICE_ATTR_RW(count);
+
 static struct attribute *ctr_attrs[] = {
 	&dev_attr_count.attr,
 	NULL,
@@ -83,13 +87,13 @@ static irqreturn_t irq_handler(int irq, void *dev_id, struct pt_regs *regs) {
     unsigned long flags;
     spin_lock_irqsave(&ctr_irq_lock, flags);
 
-    u64 now = get_jiffies_64();
-    if (now - last_pulse > debounce_jiffies && last_value == 1) { // debounced falling edge
+    //u64 now = get_jiffies_64();
+    //if (now - last_pulse > debounce_jiffies && last_value == 1) { // debounced falling edge
         atomic64_add(1, &counter);
-    }
+    //}
 
-    last_pulse = now;
-    last_value = gpio_get_value(gpio_num);
+    //last_pulse = now;
+    //last_value = gpio_get_value(gpio_num);
   
     spin_unlock_irqrestore(&ctr_irq_lock, flags);
     return IRQ_HANDLED;
@@ -103,9 +107,9 @@ int gpio_counter_init(void) {
         return -EINVAL;
     }
     
-    if (debounce != -1)  {
+    /*if (debounce != -1)  {
         debounce_jiffies = usecs_to_jiffies(debounce);
-    }
+    }*/
  
     printk(KERN_NOTICE LOGPREFIX "initializing\n");
 
@@ -116,7 +120,7 @@ int gpio_counter_init(void) {
         printk(KERN_ERR LOGPREFIX "GPIO request faiure: %d\n", gpio_num);
         goto err_gpio;
     }
-    last_value = gpio_get_value(gpio_num);
+    //last_value = gpio_get_value(gpio_num);
     
     if ( (irq_num = err = gpio_to_irq(gpio_num)) < 0 ) {
         printk(KERN_ERR LOGPREFIX "GPIO to IRQ mapping faiure %d\n", gpio_num);
@@ -127,7 +131,7 @@ int gpio_counter_init(void) {
 
     if ((err = request_irq(irq_num,
                     (irq_handler_t ) irq_handler,
-                    IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,
+                    IRQF_TRIGGER_FALLING , //| IRQF_TRIGGER_RISING, just Falling is good for my job (and faster)
                     MODNAME " pulse interrupt",
                     devid))) {
         printk(KERN_ERR LOGPREFIX "Irq Request failure\n");
